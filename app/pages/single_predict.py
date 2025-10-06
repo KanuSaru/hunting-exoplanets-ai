@@ -3,10 +3,12 @@ import numpy as np
 import pandas as pd
 import sys
 import os
+import joblib
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # Path of especial variable __file__
 
-from utils.model import load_model, load_model_f
+from utils.preprocessing import predict_with_preprocessing 
+
 
 def get_default_values():
     try:
@@ -15,6 +17,34 @@ def get_default_values():
     except Exception as e:
         st.error(f"Error loading default values: {str(e)}")
         return None    
+    
+def get_preprocessor_features():
+    """Get the exact feature order from the preprocessor"""
+    try:
+        preprocessor = joblib.load('../models/preprocessor.pkl')
+        return preprocessor['features']
+    except Exception as e:
+        st.error(f"Error loading preprocessor features: {str(e)}")
+        return None
+
+def create_ordered_features(input_data):
+    """Create DataFrame with features in the correct order"""
+    # Get the exact feature order from preprocessor
+    expected_features = get_preprocessor_features()
+    
+    if expected_features is None:
+        raise ValueError("Could not determine correct feature order from preprocessor")
+    
+    # Create DataFrame with ordered features
+    ordered_data = pd.DataFrame(index=[0])
+    
+    # Fill each feature in the correct order
+    for feature in expected_features:
+        if feature not in input_data:
+            st.warning(f"Missing feature: {feature}, using default value 0")
+        ordered_data[feature] = input_data.get(feature, 0)
+    
+    return ordered_data
 
 def predict_single():
     st.title("Individual Prediction")
@@ -147,8 +177,8 @@ def predict_single():
                         'koi_srad_err1': default_values['koi_srad_err1'],
                         'koi_srad_err2': default_values['koi_srad_err2'],
                         'koi_model_snr': default_values['koi_model_snr'],
-                        'koi_tce_delivname_q1_q17_dr24_tce': 1,
-                        'koi_tce_delivname_q1_q17_dr25_tce': 0
+                        'koi_tce_delivname_q1_q16_tce': 1,  # Changed this line
+                        'koi_tce_delivname_q1_q17_dr24_tce': 0  # Changed this line
                     }
                     
                     input_data.update(optional_params)
@@ -158,26 +188,51 @@ def predict_single():
                     input_data['insol_prad_ratio'] = input_data['koi_insol'] / (input_data['koi_prad'] + 1e-6)
                     input_data['stellar_luminosity_proxy'] = input_data['koi_steff'] * (input_data['koi_srad'] ** 2)
                     
-                    features = pd.DataFrame([input_data])
-                    model = load_model_f()
-                    prediction = model.predict(features)[0]
-                    probability = model.predict_proba(features)[0]
+                    features = create_ordered_features(input_data)
+                    st.write("Debug: Feature order check")
+                    st.write(features.columns.tolist())
                     
+                    features = create_ordered_features(input_data)
+                    
+                    # Debug information
+                    '''
+                    st.write("### Debug Information")
+                    st.write("Number of features:", len(features.columns))
+                    st.write("Feature order:")
+                    for i, col in enumerate(features.columns):
+                        st.write(f"{i+1}. {col}")
+                    '''
+                    predictions, probabilities, _ = predict_with_preprocessing(features)
+                    predictions, probabilities, _ = predict_with_preprocessing(features)
+                    prediction = predictions[0]
+                    probability = probabilities[0]
+            
                     # Show results in an expander
                     with st.expander("Prediction Results", expanded=True):
-                        if prediction == 1:
-                            st.success(f"Possible Exoplanet! (Confidence: {probability[1]:.2%})")
+                        confidence_threshold = 0.55
+                        exoplanet_probability = probability[1]
+                        
+                        if prediction == 1 and exoplanet_probability >= confidence_threshold:
+                            st.success(f"Possible Exoplanet! (Confidence: {exoplanet_probability:.2%})")
                             st.balloons()
                         else:
-                            st.error(f"Probably not an exoplanet (Confidence: {probability[0]:.2%})")
+                            if prediction == 1:
+                                st.warning(f"Uncertain Classification - More Data Needed (Confidence: {exoplanet_probability:.2%})")
+                            else:
+                                st.error(f"Probably not an exoplanet (Confidence: {probability[0]:.2%})")
                         
                         # Show additional details
                         st.write("---")
                         st.caption("Detailed Probabilities:")
                         st.json({
-                            "False Positive": f"{probability[0]:.3f}",
+                            "Candidate": f"{probability[0]:.3f}",
                             "Confirmed Exoplanet": f"{probability[1]:.3f}"
                         })
+                        
+                        # Add threshold information
+                        st.caption("Classification Threshold:")
+                        st.progress(exoplanet_probability)
+                        st.text(f"Confidence Threshold: {confidence_threshold:.0%}")
                         
                 except Exception as e:
                     st.error(f"Error during prediction: {str(e)}")

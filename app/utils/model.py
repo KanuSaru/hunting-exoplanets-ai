@@ -11,16 +11,7 @@ def get_model_path(filename):
 
 def load_model():
     try:
-        model_path = get_model_path('ensemble_model.pkl')
-        model = joblib.load(model_path)
-        return model
-    
-    except FileNotFoundError:
-        raise FileNotFoundError("Model file not found.")
-
-def load_model_f():
-    try:
-        model_path = get_model_path('ensemble_model_final.pkl')
+        model_path = get_model_path('ensemble_model_exoplanets.pkl')
         model = joblib.load(model_path)
         return model
     
