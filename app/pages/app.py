@@ -5,6 +5,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # Path of especial variable __file__
 from single_predict import predict_single
 from batch_prediction import batch_prediction
+from stats import stats
 
 def main_page():
     
@@ -115,7 +116,7 @@ def main():
     elif page == "Batch Prediction and Plots":
         batch_prediction()
     elif 'Model Statistics (General)':
-        return
+        stats()
         
 if __name__ == "__main__":
     main()
