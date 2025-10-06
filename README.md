@@ -1,8 +1,4 @@
 # hunting-exoplanets-ai
-
-# hunting-exoplanets-ai
-
-
 ---
 
 markdown
